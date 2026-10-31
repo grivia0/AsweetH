@@ -13,11 +13,11 @@ and feels like it belongs to 2026.
 [![Java](https://img.shields.io/badge/Java-25-FF6FAE?style=for-the-badge&labelColor=1B1022)](https://adoptium.net/)
 [![License](https://img.shields.io/badge/License-MIT-FF6FAE?style=for-the-badge&labelColor=1B1022)](LICENSE)
 
-[![version](https://img.shields.io/badge/version-0.1.0-C2185B?style=flat-square&labelColor=1B1022)](https://github.com/grivia0/AsweetH/releases)
+[![release](https://img.shields.io/github/v/release/grivia0/AsweetH?include_prereleases&style=flat-square&color=C2185B&labelColor=1B1022)](https://github.com/grivia0/AsweetH/releases)
 [![side](https://img.shields.io/badge/side-client--only-C2185B?style=flat-square&labelColor=1B1022)](#compatibility)
 [![build](https://github.com/grivia0/AsweetH/actions/workflows/build.yml/badge.svg)](https://github.com/grivia0/AsweetH/actions/workflows/build.yml)
 
-[**Features**](#-features) · [**Install**](#-install) · [**Controls**](#-controls) · [**Config**](#-configuration) · [**Build**](#-build-from-source)
+[**⬇ Download**](https://github.com/grivia0/AsweetH/releases/latest) · [**Screenshots**](#-screenshots) · [**Features**](#-features) · [**Install**](#-install) · [**Controls**](#-controls) · [**Config**](#-configuration) · [**Build**](#-build-from-source)
 
 </div>
 
@@ -26,6 +26,23 @@ and feels like it belongs to 2026.
 > [!NOTE]
 > ASweetH is a **client-side** mod: it registers HUD layers, key binds and one mixin. It never sends a
 > packet or changes the world for anyone else, so it is safe on any server you already play on.
+
+## 📷 Screenshots
+
+<table>
+  <tr>
+    <td align="center" width="50%"><img src="docs/Ingame_view.png" alt="ASweetH running in game on a night beach"><br>
+      <sub><b>In game</b> — keystrokes bottom left, watermark and readouts bottom right, all through the HUD layer</sub></td>
+    <td align="center" width="50%"><img src="docs/Main_menu.png" alt="Minecraft main menu wearing glass buttons"><br>
+      <sub><b>The title screen</b> — the menus are vanilla's; the glass buttons and rose edges are ASweetH's</sub></td>
+  </tr>
+  <tr>
+    <td align="center" width="50%"><img src="docs/AsweetH_menu.png" alt="The ASweetH settings screen with seven tabs"><br>
+      <sub><b>Right Shift</b> — seven tabs, scrollable rows, live values (here in Sakura Milk)</sub></td>
+    <td align="center" width="50%"><img src="docs/World_Selection_menu.png" alt="World selection screen"><br>
+      <sub><b>World select</b> — vanilla layout, glass sprites, accent hairline top and bottom</sub></td>
+  </tr>
+</table>
 
 ## 🖤 At a glance
 
@@ -38,14 +55,13 @@ and feels like it belongs to 2026.
 ## 🎨 The look
 
 Four complete palettes, every colour from one enum. Switch the theme and the HUD, the widgets and the
-vanilla menus repaint together.
+vanilla screen tint all follow, because nothing in the render path hardcodes a colour.
 
 <img src="docs/themes.png" alt="Rose Glass, Obsidian, Sakura Milk and Opaque palettes" width="100%">
 
 **Rose Glass** (default) · **Obsidian** (pink only where it means something) · **Sakura Milk**
 (a light glass for daytime play) · **Opaque** (no translucency at all — for screenshots and
 low-contrast displays).
-
 
 ## 📦 Install
 
@@ -62,9 +78,10 @@ low-contrast displays).
 3. Start the game. The HUD appears in the top left, and **Right Shift** opens the menu.
 
 > [!TIP]
-> Grab the jar from the [releases page](https://github.com/grivia0/AsweetH/releases) — or build it
-> yourself in one command, see [Build from source](#-build-from-source). The CI workflow also publishes
-> a jar as a build artifact on every push.
+> **Download [`asweeth-0.1.0.jar`](https://github.com/grivia0/AsweetH/releases/latest)** from the releases
+> page. 0.1.0 is published as a **pre-release**: the jar is complete and playable, the label only means
+> the feature set can still move before 0.1.1. Building it yourself is one command as well — see
+> [Build from source](#-build-from-source) — and CI attaches a jar to every workflow run.
 
 Settings live in `config/asweeth.json` next to the other mods' configs and are written on every
 change, so a crash never eats them. Deleting the file is a full reset.
@@ -179,6 +196,20 @@ Every widget is a real `AbstractWidget` (`GlassButton`, `GlassToggle`, `GlassSli
 `TabButton`), so keyboard navigation, narration and focus handling come from vanilla instead of being
 reimplemented badly. ASweetH also registers a `ConfigScreenHandler.ConfigScreenFactory`, which gives
 *Options → Mods* a working **Config** button.
+
+### Vanilla screens
+
+The glass does not stop at the HUD. The jar replaces a handful of **vanilla** GUI resources — the menu
+background tiles and their in-world variants, the four header/footer separator strips, and the widget
+sprite set (`button`, `button_highlighted`, `button_disabled`, `slider`, `slider_highlighted`,
+`slider_handle`, `tab`, `tab_selected`, `text_field` and their highlighted states) — so the title
+screen, world select, pause menu, options and every other vanilla screen inherits the look with no
+resource pack to install and nothing to enable.
+
+On top of that, `ClientEvents.onScreenBackground` paints one palette gradient and a hairline accent
+frame over the background of every vanilla screen (`themeVanillaScreens`, Theme tab). That gradient is
+deliberately faint over the title-screen panorama and stronger over in-world screens, and it is the part
+the switch turns off — the sprites are resource overrides and stay, the tint and the frame go.
 
 ### Performance presets
 
@@ -351,7 +382,7 @@ jars without a word, so without this line the only symptom is a mod that quietly
 | Fullbright does nothing | It is off by default; turn it on in *General → Fullbright*. |
 | `Unsupported class file major version 71` while building | Gradle is running on a JDK newer than 25; the daemon pin handles it, so check that `gradle/gradle-daemon-jvm.properties` survived your clone. |
 | My settings reset | `config/asweeth.json` was deleted or unreadable — ASweetH logs one line and starts from defaults instead of refusing to load. |
-| Another mod's screen looks odd | *Theme → theme vanilla screens* repaints vanilla GUI sprites; switching the palette to **Opaque** shows what is paint and what is the mod. |
+| Another mod's screen looks odd | ASweetH overrides vanilla GUI sprites, so any screen built from them is repainted. *Theme → theme vanilla screens* drops the gradient and accent frame; **Opaque** shows the sprites without translucency. |
 
 ## 📄 License & credits
 

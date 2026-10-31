@@ -1,0 +1,38 @@
+# eclipse
+bin
+*.launch
+.settings
+.metadata
+.classpath
+.project
+
+# idea
+out
+*.ipr
+*.iws
+*.iml
+.idea
+
+# gradle
+build
+.gradle
+
+# other
+eclipse
+run
+run-data
+logs
+*.log
+*.log.gz
+.mixin.out
+.vs
+
+# Files from Forge MDK
+forge_README.txt
+forge*changelog.txt
+
+# local toolchain (not part of the repo)
+.jdk
+
+# assistant / scratch notes kept on one machine only
+.deepbrain

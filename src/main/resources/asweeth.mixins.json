@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "minVersion": "0.8.7",
+  "package": "dev.asweeth.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "LightmapRenderStateExtractorMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

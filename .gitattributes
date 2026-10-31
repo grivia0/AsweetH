@@ -1,0 +1,9 @@
+# Everything is text unless proven otherwise; keep the repo byte-stable across platforms.
+* text=auto eol=lf
+
+*.jar binary
+*.png binary
+*.ogg binary
+
+gradlew text eol=lf
+*.bat text eol=crlf

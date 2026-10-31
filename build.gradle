@@ -1,0 +1,67 @@
+// ASweetH — a glass-black + pink Forge client for Minecraft 26.3.
+// Built on the official MinecraftForge MDK layout (ForgeGradle 7).
+plugins {
+    id 'java'
+    id 'idea'
+    id 'eclipse'
+    id 'net.minecraftforge.gradle' version '[7.0.17,8)'
+}
+
+version = project.mod_version
+group = project.maven_group
+base.archivesName = project.mod_id
+
+// Mojang ships Java 25 with Minecraft 26.x, so the client targets Java 25.
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
+
+// The Gradle daemon itself is pinned to Java 25 as well (gradle/gradle-daemon-jvm.properties):
+// Gradle 9.7 cannot compile build scripts on a newer JDK, and the project needs 25 either way.
+
+minecraft {
+    runs {
+        configureEach {
+            workingDir = layout.projectDirectory.dir('run')
+
+            systemProperty 'eventbus.api.strictRuntimeChecks', 'true'
+            systemProperty 'forge.enabledGameTestNamespaces', project.mod_id
+
+            // Mixins are loaded through the config that is also baked into the jar manifest.
+            args "--mixin.config=${project.mod_id}.mixins.json"
+
+            // ASweetH is a client; nothing here needs a dedicated server.
+            maxHeapSize = '2G'
+        }
+
+        register('client') {
+            args '--username', 'ASweetH'
+        }
+    }
+}
+
+repositories {
+    minecraft.mavenizer(it) // In Kotlin, it = this
+    maven fg.forgeMaven
+    maven fg.minecraftLibsMaven
+    mavenCentral()
+}
+
+dependencies {
+    implementation minecraft.dependency("net.minecraftforge:forge:${project.minecraft_version}-${project.forge_version}")
+    annotationProcessor 'net.minecraftforge:eventbus-validator:7.0.6'
+    // No Mixin annotation processor on purpose: since 1.20.2 Forge runs mods on Mojang official names,
+    // so there is nothing to remap and no refmap to generate. Its target validation would still ask for a
+    // searge/notch mapping ("Unable to locate obfuscation mapping for @Inject target ...") and fail the
+    // build, so injection points are checked by the runtime instead.
+}
+
+tasks.withType(JavaCompile).configureEach {
+    // Use the UTF-8 charset for Java compilation
+    options.encoding = 'UTF-8'
+}
+
+tasks.named('jar', Jar) {
+    manifest {
+        // Tells Mixin which configs belong to ASweetH without needing a command line flag.
+        attributes['MixinConfigs'] = "${project.mod_id}.mixins.json"
+    }
+}

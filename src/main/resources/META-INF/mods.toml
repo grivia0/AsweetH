@@ -1,0 +1,29 @@
+modLoader="javafml"
+loaderVersion="[66,)"
+license="MIT"
+clientSideOnly=true
+
+[[mods]]
+modId="asweeth"
+version="0.1.0"
+displayName="ASweetH"
+authors="grivia0"
+displayURL="https://github.com/grivia0/AsweetH"
+logoFile="asweeth_logo.png"
+description='''ASweetH is a lightweight, glass-and-pink Minecraft client layer for 26.3.
+Custom HUD and keystrokes, a tabbed settings screen, fullbright, lite-mode performance presets and a
+translucent black/rose theme.'''
+
+[[dependencies.asweeth]]
+    modId="forge"
+    mandatory=true
+    versionRange="[66,)"
+    ordering="NONE"
+    side="CLIENT"
+
+[[dependencies.asweeth]]
+    modId="minecraft"
+    mandatory=true
+    versionRange="[26.3,26.4)"
+    ordering="NONE"
+    side="CLIENT"

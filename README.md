@@ -29,6 +29,9 @@ and feels like it belongs to 2026.
 
 ## 📷 Screenshots
 
+Captured on Forge 66.1.2 / Minecraft 26.3 with the **Sakura Milk** palette — the light glass variant.
+Rose Glass, the default, is the dark smoked one from the banner.
+
 <table>
   <tr>
     <td align="center" width="50%"><img src="docs/Ingame_view.png" alt="ASweetH running in game on a night beach"><br>
@@ -38,7 +41,7 @@ and feels like it belongs to 2026.
   </tr>
   <tr>
     <td align="center" width="50%"><img src="docs/AsweetH_menu.png" alt="The ASweetH settings screen with seven tabs"><br>
-      <sub><b>Right Shift</b> — seven tabs, scrollable rows, live values (here in Sakura Milk)</sub></td>
+      <sub><b>Right Shift</b> — seven tabs, scrollable rows, live values, every control themed</sub></td>
     <td align="center" width="50%"><img src="docs/World_Selection_menu.png" alt="World selection screen"><br>
       <sub><b>World select</b> — vanilla layout, glass sprites, accent hairline top and bottom</sub></td>
   </tr>

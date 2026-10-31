@@ -17,7 +17,7 @@ and feels like it belongs to 2026.
 [![side](https://img.shields.io/badge/side-client--only-C2185B?style=flat-square&labelColor=1B1022)](#compatibility)
 [![build](https://github.com/grivia0/AsweetH/actions/workflows/build.yml/badge.svg)](https://github.com/grivia0/AsweetH/actions/workflows/build.yml)
 
-[**⬇ Download**](https://github.com/grivia0/AsweetH/releases/latest) · [**Screenshots**](#-screenshots) · [**Features**](#-features) · [**Install**](#-install) · [**Controls**](#-controls) · [**Config**](#-configuration) · [**Build**](#-build-from-source)
+[**⬇ Download**](https://github.com/grivia0/AsweetH/releases) · [**Screenshots**](#-screenshots) · [**Features**](#-features) · [**Install**](#-install) · [**Controls**](#-controls) · [**Config**](#-configuration) · [**Build**](#-build-from-source)
 
 </div>
 
@@ -81,10 +81,10 @@ low-contrast displays).
 3. Start the game. The HUD appears in the top left, and **Right Shift** opens the menu.
 
 > [!TIP]
-> **Download [`asweeth-0.1.0.jar`](https://github.com/grivia0/AsweetH/releases/latest)** from the releases
-> page. 0.1.0 is published as a **pre-release**: the jar is complete and playable, the label only means
-> the feature set can still move before 0.1.1. Building it yourself is one command as well — see
-> [Build from source](#-build-from-source) — and CI attaches a jar to every workflow run.
+> **[Download `asweeth-0.1.0.jar`](https://github.com/grivia0/AsweetH/releases/download/v0.1.0/asweeth-0.1.0.jar)** —
+> 93 kB, no dependencies. 0.1.0 is published as a **pre-release**: the jar is complete and playable, the
+> label only means the feature set can still move before 0.1.1. Building it yourself is one command as
+> well — see [Build from source](#-build-from-source) — and CI attaches a jar to every workflow run.
 
 Settings live in `config/asweeth.json` next to the other mods' configs and are written on every
 change, so a crash never eats them. Deleting the file is a full reset.

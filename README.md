@@ -54,7 +54,7 @@ low-contrast displays).
 | **Minecraft** | 26.3 (client) |
 | **Loader** | Forge 66.1.2 or newer on the 66 line |
 | **Java** | 25 — the runtime that ships with 26.x |
-| **Side** | Client only (loads fine on a server, changes nothing there) |
+| **Side** | Client only — marked `clientSideOnly` in `mods.toml`, so it is skipped on a dedicated server |
 
 1. Install **Forge 26.3** and launch it once, so the launcher creates the instance.
 2. Drop `asweeth-0.1.0.jar` into that instance's `mods/` folder
@@ -320,8 +320,8 @@ launch says nothing about it.
 
 ## 🔗 Compatibility
 
-* **Client-side only.** It never talks to the server, so it does not need to be installed there and
-  cannot be mistaken for a cheat by being loaded.
+* **Client-side only.** It never talks to the server, so there is nothing to install there and nothing
+  server-side that could object to it being loaded.
 * **No libraries.** No Architectury, no Fabric API, no third-party GUI toolkit — just Forge and the mod.
 * **Other Forge mods.** ASweetH adds one mixin, at the tail of the lightmap extractor; anything that
   replaces that method wholesale is the only realistic conflict, and with Fullbright off the injection

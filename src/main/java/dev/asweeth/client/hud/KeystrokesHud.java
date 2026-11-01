@@ -1,6 +1,7 @@
 package dev.asweeth.client.hud;
 
 import dev.asweeth.AsweetH;
+import dev.asweeth.client.screen.HudEditorScreen;
 import dev.asweeth.config.ClientSettings;
 import dev.asweeth.theme.Theme;
 import dev.asweeth.theme.ThemeMode;
@@ -24,10 +25,12 @@ import net.minecraftforge.client.gui.overlay.ForgeLayer;
  * allocation free: seven floats of animation state, a handful of colours resolved once per frame, and
  * {@link Render2D} quads.</p>
  *
- * <p>Position, scale, opacity and the colour scheme all come from {@link ClientSettings}; the block is
- * laid out in unscaled GUI pixels and pushed through the pose matrix once, which is why changing the
- * size never blurs the labels. The anchor snaps the block to any of the nine grid spots, so the caps
- * can share a corner with the main HUD or move out of the way of a minimap.</p>
+ * <p>Position, scale, opacity and the colour scheme all come from {@link ClientSettings}: the block
+ * takes its box from the {@code KEYSTROKES} {@link HudLayout}, is laid out in unscaled GUI pixels and
+ * pushed through the pose matrix once, which is why changing the size never blurs the labels. The
+ * anchor snaps the block to any of the nine grid spots, so the caps can share a corner with the main
+ * HUD or move out of the way of a minimap, and the offset underneath it is what the HUD editor drags.
+ * The on screen rectangle is published to {@link HudBounds} so the editor can hit test it.</p>
  */
 public final class KeystrokesHud implements ForgeLayer {
     /** Layer id, registered above {@link AsweetHHud}. */
@@ -72,7 +75,11 @@ public final class KeystrokesHud implements ForgeLayer {
             return;
         }
         ClientSettings settings = ClientSettings.get();
-        if (!settings.keystrokesEnabled || minecraft.gui.hud.isHidden() || minecraft.gui.screen() != null) {
+        boolean editing = HudEditorScreen.isEditing();
+        // The editor keeps the caps on screen - dimmed when the block is switched off - so there is
+        // always something to drag; outside it the block stays out of menus and screens as before.
+        if (!editing && (!settings.keystrokesEnabled || minecraft.gui.hud.isHidden()
+                || minecraft.gui.screen() != null)) {
             return;
         }
 
@@ -89,21 +96,21 @@ public final class KeystrokesHud implements ForgeLayer {
             press[RMB] = Easing.damp(press[RMB], options.keyUse.isDown() ? 1.0F : 0.0F, speed, seconds);
         }
 
-        preparePalette(Theme.current(), settings.keystrokeTint, settings.keystrokeOpacity);
+        preparePalette(Theme.current(), settings.keystrokeTint,
+                settings.layout(HudElement.KEYSTROKES).alpha(settings.keystrokesEnabled));
 
         int rows = settings.keystrokesMouse ? 4 : 3;
         int blockHeight = rows * ROW_STEP - GAP;
-        float scale = Math.max(0.6F, Math.min(1.8F, settings.keystrokeScale));
-        HudAnchor anchor = settings.keystrokeAnchor == null ? HudAnchor.BOTTOM_LEFT : settings.keystrokeAnchor;
-        int originX = anchor.originX(minecraft.getWindow().getGuiScaledWidth(),
-                Math.round(BLOCK_WIDTH * scale), MARGIN);
-        int originY = anchor.originY(minecraft.getWindow().getGuiScaledHeight(),
-                Math.round(blockHeight * scale), MARGIN);
+        HudLayout layout = settings.layout(HudElement.KEYSTROKES);
+        int scaledWidth = layout.scaledWidth(BLOCK_WIDTH);
+        int scaledHeight = layout.scaledHeight(blockHeight);
+        int originX = layout.x(minecraft.getWindow().getGuiScaledWidth(), scaledWidth, MARGIN);
+        int originY = layout.y(minecraft.getWindow().getGuiScaledHeight(), scaledHeight, MARGIN);
 
         Font font = minecraft.font;
         graphics.pose().pushMatrix();
         graphics.pose().translate(originX, originY);
-        graphics.pose().scale(scale, scale);
+        graphics.pose().scale(layout.effectiveScale(), layout.effectiveScale());
 
         drawKey(graphics, font, KEY_WIDTH + GAP, 0, KEY_WIDTH, LABELS[W], press[W]);
         int row = ROW_STEP;
@@ -119,6 +126,8 @@ public final class KeystrokesHud implements ForgeLayer {
         }
 
         graphics.pose().popMatrix();
+
+        HudBounds.put(HudElement.KEYSTROKES, originX, originY, scaledWidth, scaledHeight);
     }
 
 
@@ -141,7 +150,9 @@ public final class KeystrokesHud implements ForgeLayer {
      * is why it is the one scheme that does not read any {@link ThemeMode} token.
      */
     private void preparePalette(ThemeMode theme, KeystrokeTint tint, float opacitySetting) {
-        opacity = Math.max(0.2F, Math.min(1.0F, opacitySetting));
+        // Floor of 0.05 rather than the layout's 0.2: the editor previews a switched off block dimmed,
+        // and clamping that up to the minimum would make the preview look identical to being enabled.
+        opacity = Math.max(0.05F, Math.min(1.0F, opacitySetting));
         switch (tint) {
             case ACCENT -> {
                 idleTop = Colors.lerp(theme.panelTop(), theme.accent(), 0.22F);

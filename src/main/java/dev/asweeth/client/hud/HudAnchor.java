@@ -38,6 +38,25 @@ public enum HudAnchor {
         this.labelKey = labelKey;
     }
 
+    /**
+     * The grid spot at {@code column} / {@code row}, both clamped to 0-2.
+     *
+     * <p>The editor re-pins an element to the spot nearest to where it was dropped, so the stored
+     * offset stays a handful of pixels measured from the closest corner or edge. That is what keeps a
+     * dragged layout in place when the window or the GUI scale changes: a large offset banked against
+     * a far away anchor would drift instead.</p>
+     */
+    public static HudAnchor at(int column, int row) {
+        int wantedColumn = Math.max(0, Math.min(2, column));
+        int wantedRow = Math.max(0, Math.min(2, row));
+        for (HudAnchor anchor : values()) {
+            if (anchor.column == wantedColumn && anchor.row == wantedRow) {
+                return anchor;
+            }
+        }
+        return TOP_LEFT;
+    }
+
     /** Left edge of a block {@code blockWidth} wide on a screen {@code guiWidth} wide. */
     public int originX(int guiWidth, int blockWidth, int margin) {
         return switch (column) {

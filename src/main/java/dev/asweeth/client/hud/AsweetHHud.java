@@ -2,6 +2,7 @@ package dev.asweeth.client.hud;
 
 import dev.asweeth.AsweetH;
 import dev.asweeth.client.perf.PerformancePreset;
+import dev.asweeth.client.screen.HudEditorScreen;
 import dev.asweeth.config.ClientSettings;
 import dev.asweeth.theme.Theme;
 import dev.asweeth.theme.ThemeMode;
@@ -19,42 +20,43 @@ import net.minecraft.resources.Identifier;
 import net.minecraftforge.client.gui.overlay.ForgeLayer;
 
 /**
- * The ASweetH watermark and info readout.
+ * The ASweetH watermark and stat readouts.
  *
  * <p>Minecraft 26.3 collects HUD layers through {@code AddGuiOverlayLayersEvent} and calls
  * {@link ForgeLayer#extract} while it builds the GUI render state, so this class only submits quads
  * and glyphs - no immediate-mode GL.</p>
  *
- * <p>The readouts are cached: FPS refreshes four times a second, coordinates ten times, ping twice and
- * the chunk counter twice, and their glyph widths are measured only when the string changes. The old
- * implementation built a {@code List<String[]>} plus five {@code Font#width} calls every frame, which
- * is pure garbage on a high framerate client. Turning "Cache readouts" off in the Optimisation tab
- * restores the per-frame rebuild for comparison.</p>
+ * <p>Each element - the watermark pill and one pill per readout - owns a {@link HudLayout}, so the HUD
+ * editor can drag, scale and fade them independently. This layer therefore never computes a shared
+ * block origin: it measures one element, asks that element's layout where the box goes, pushes the pose
+ * matrix for it and pops again. Anchors and scale are applied to the origin, never to the glyphs, so a
+ * 1.8x HUD stays crisp.</p>
  *
- * <p>Placement, size and opacity are the three HUD settings: the block measures itself first, asks
- * {@link HudAnchor} where that box goes, and only then pushes the pose matrix. Anchor and scale
- * are applied to the origin, never to the text, so a 1.8x HUD keeps crisp glyphs.</p>
+ * <p>Every element also publishes its on screen rectangle to {@link HudBounds} as it draws, which is how
+ * the editor hit tests exactly what the player sees instead of recomputing seven widths.</p>
+ *
+ * <p>The readouts are cached: FPS refreshes four times a second, coordinates ten times, ping and memory
+ * once and the chunk counter twice, with glyph widths measured only when a string changes. Turning
+ * "Cache readouts" off in the Optimisation tab restores the per-frame rebuild for comparison.</p>
  */
 public final class AsweetHHud implements ForgeLayer {
     /** Layer id used when the HUD is inserted above the vanilla overlay stack. */
     public static final Identifier ID = Identifier.fromNamespaceAndPath(AsweetH.MOD_ID, "hud");
 
+    /** Gap between an element and the screen edge, in GUI pixels. */
     private static final int MARGIN = 4;
     private static final int PANEL_PAD = 6;
-    private static final int LABEL_GAP = 6;
+    /** Padding inside a stat pill. */
+    private static final int CHIP_PAD = 4;
+    private static final int LABEL_GAP = 5;
     private static final int PANEL_RADIUS = 5;
+    private static final int CHIP_RADIUS = 4;
     private static final int BRAND_HEIGHT = 18;
-    /** Vertical space between the brand panel and the info panel. */
-    private static final int PANEL_GAP = 3;
+    private static final int CHIP_HEIGHT = 13;
 
     private static final String BRAND_HEAD = "ASweet";
     private static final String BRAND_TAIL = "H";
     private static final String BRAND_VERSION = "v" + AsweetH.VERSION;
-    private static final String LABEL_FPS = "FPS";
-    private static final String LABEL_PING = "PING";
-    private static final String LABEL_POSITION = "XYZ";
-    private static final String LABEL_CHUNKS = "CHK";
-    private static final String LABEL_MEMORY = "MEM";
 
     /** Readout refresh periods. FPS and coordinates change constantly, ping and memory do not. */
     private static final long FPS_INTERVAL = 250L;
@@ -84,65 +86,53 @@ public final class AsweetHHud implements ForgeLayer {
 
     /** Cached metrics for the current font; a resource reload hands us a new one and invalidates. */
     private Font metricsFont;
-    private int labelWidth;
     private int brandHeadWidth;
     private int brandTailWidth;
     private int brandVersionWidth;
+    /** Measured chip label widths, indexed by {@link HudElement#ordinal()}. */
+    private final int[] labelWidths = new int[HudElement.values().length];
 
-    /** Alpha multiplier for this frame, resolved in {@link #extract} and used by {@link #fade}. */
-    private float opacity = 1.0F;
+    /** True while the HUD editor is open; disabled elements are then previewed dimmed, not hidden. */
+    private boolean editing;
 
     @Override
     public void extract(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker) {
         Minecraft minecraft = Minecraft.getInstance();
         LocalPlayer player = minecraft.player;
         if (player == null || minecraft.level == null) {
+            HudBounds.clear();
             return;
         }
         ClientSettings settings = ClientSettings.get();
-        if (!settings.hudEnabled || minecraft.gui.hud.isHidden()) {
+        editing = HudEditorScreen.isEditing();
+        // The editor keeps drawing while the player has the HUD switched off or pressed F1 - otherwise
+        // there would be nothing to drag, and no way to find an element that is currently hidden.
+        if (!editing && (!settings.hudEnabled || minecraft.gui.hud.isHidden())) {
+            // Nothing was painted, so last frame's rectangles would only mislead the editor.
+            HudBounds.clear();
             return;
         }
 
         ThemeMode theme = Theme.current();
         Font font = minecraft.font;
         ensureMetrics(font);
-        opacity = Math.max(0.2F, Math.min(1.0F, settings.hudOpacity));
-        // Refreshed before measuring: the anchor needs the real panel sizes, and the cached widths are
-        // only valid for the strings of this frame.
+        // Refreshed before measuring: the cached widths are only valid for the strings of this frame.
         refresh(minecraft, player, font, settings);
 
-        int brandWidth = settings.showWatermark ? brandWidth(font, settings) : 0;
-        int rows = infoRows(settings);
-        int infoWidth = rows == 0 ? 0 : infoWidth();
-        int infoHeight = rows == 0 ? 0 : PANEL_PAD * 2 + rows * Render2D.LINE_STEP - 1;
-        int blockWidth = Math.max(brandWidth, infoWidth);
-        int blockHeight = (settings.showWatermark ? BRAND_HEIGHT + PANEL_GAP : 0) + infoHeight;
+        int guiWidth = minecraft.getWindow().getGuiScaledWidth();
+        int guiHeight = minecraft.getWindow().getGuiScaledHeight();
 
-        float scale = Math.max(0.6F, Math.min(1.8F, settings.hudScale));
-        HudAnchor anchor = settings.hudAnchor == null ? HudAnchor.TOP_LEFT : settings.hudAnchor;
-        int originX = anchor.originX(minecraft.getWindow().getGuiScaledWidth(),
-                Math.round(blockWidth * scale), MARGIN);
-        int originY = anchor.originY(minecraft.getWindow().getGuiScaledHeight(),
-                Math.round(blockHeight * scale), MARGIN);
-
-        graphics.pose().pushMatrix();
-        graphics.pose().translate(originX, originY);
-        graphics.pose().scale(scale, scale);
-
-        int y = 0;
-        if (settings.showWatermark) {
-            y = drawBrand(graphics, font, theme, settings, anchor.innerX(blockWidth, brandWidth), y);
-        }
-        if (rows > 0) {
-            drawInfo(graphics, font, theme, settings, anchor.innerX(blockWidth, infoWidth), y, rows);
-        }
-
-        graphics.pose().popMatrix();
+        drawBrand(graphics, font, theme, settings, guiWidth, guiHeight);
+        drawChip(graphics, font, theme, settings, HudElement.FPS, fpsText, fpsWidth, guiWidth, guiHeight);
+        drawChip(graphics, font, theme, settings, HudElement.PING, pingText, pingWidth, guiWidth, guiHeight);
+        drawChip(graphics, font, theme, settings, HudElement.COORDINATES, positionText, positionWidth, guiWidth,
+                guiHeight);
+        drawChip(graphics, font, theme, settings, HudElement.CHUNKS, chunkText, chunkWidth, guiWidth, guiHeight);
+        drawChip(graphics, font, theme, settings, HudElement.MEMORY, memoryText, memoryWidth, guiWidth, guiHeight);
     }
 
-    /** Scales a colour's alpha by the HUD opacity, so panels and their text fade together. */
-    private int fade(int color) {
+    /** Scales a colour's alpha by an element's opacity, so a panel and its text fade together. */
+    private static int fade(int color, float opacity) {
         return opacity >= 1.0F ? color : Colors.multiplyAlpha(color, opacity);
     }
 
@@ -151,143 +141,109 @@ public final class AsweetHHud implements ForgeLayer {
         return settings.showLiteBadge && settings.preset != PerformancePreset.STANDARD;
     }
 
+    /** Short label drawn on the left of an element's chip. */
+    private static String chipLabel(HudElement element) {
+        return switch (element) {
+            case FPS -> "FPS";
+            case PING -> "PING";
+            case COORDINATES -> "XYZ";
+            case CHUNKS -> "CHK";
+            case MEMORY -> "MEM";
+            case WATERMARK, KEYSTROKES -> "";
+        };
+    }
+
     /** Width of the watermark panel, in unscaled HUD pixels. */
     private int brandWidth(Font font, ClientSettings settings) {
-        int width = PANEL_PAD + brandHeadWidth + brandTailWidth + 4 + brandVersionWidth + PANEL_PAD;
+        int width = PANEL_PAD * 2 + brandHeadWidth + brandTailWidth + 4 + brandVersionWidth;
         if (badge(settings)) {
             width += font.width(settings.preset.label()) + 8 + 6;
         }
         return width;
     }
 
-    /** Number of enabled readout rows; zero means the info panel is skipped entirely. */
-    private static int infoRows(ClientSettings settings) {
-        int rows = 0;
-        rows += settings.showFps ? 1 : 0;
-        rows += settings.showPing ? 1 : 0;
-        rows += settings.showCoordinates ? 1 : 0;
-        rows += settings.showChunks ? 1 : 0;
-        rows += settings.showMemory ? 1 : 0;
-        return rows;
-    }
-
-    /** Width of the info panel from the measured label and value glyph widths. */
-    private int infoWidth() {
-        int valueWidth = Math.max(Math.max(fpsWidth, pingWidth), Math.max(positionWidth, chunkWidth));
-        valueWidth = Math.max(valueWidth, memoryWidth);
-        return PANEL_PAD * 2 + labelWidth + LABEL_GAP + valueWidth;
-    }
-
     /**
-     * Draws "ASweetH v0.1.0" with the trailing H in the accent colour, plus the lite-mode badge.
+     * Draws the "ASweetH v0.1.1" pill with the trailing H in the accent colour, plus the preset badge.
      *
-     * @return the y coordinate of the next free row
+     * <p>The badge and the version are placed from the panel's own width, so the pill grows with the
+     * version string and never overlaps the accent underline.</p>
      */
-    private int drawBrand(GuiGraphicsExtractor graphics, Font font, ThemeMode theme, ClientSettings settings,
-                          int x, int y) {
+    private void drawBrand(GuiGraphicsExtractor graphics, Font font, ThemeMode theme, ClientSettings settings,
+                           int guiWidth, int guiHeight) {
+        HudElement element = HudElement.WATERMARK;
+        boolean enabled = element.enabled(settings);
+        if (!enabled && !editing) {
+            return;
+        }
+        HudLayout layout = settings.layout(element);
         int width = brandWidth(font, settings);
-        boolean showBadge = badge(settings);
+        int scaledWidth = layout.scaledWidth(width);
+        int scaledHeight = layout.scaledHeight(BRAND_HEIGHT);
+        int originX = layout.x(guiWidth, scaledWidth, MARGIN);
+        int originY = layout.y(guiHeight, scaledHeight, MARGIN);
+        float opacity = layout.alpha(enabled);
 
-        Render2D.glassPanel(graphics, x, y, width, BRAND_HEIGHT, PANEL_RADIUS, theme, opacity);
-        int textY = y + (BRAND_HEIGHT - font.lineHeight) / 2 + 1;
-        Render2D.text(graphics, font, BRAND_HEAD, x + PANEL_PAD, textY, fade(theme.text()));
-        Render2D.text(graphics, font, BRAND_TAIL, x + PANEL_PAD + brandHeadWidth, textY, fade(theme.accent()));
-        Render2D.text(graphics, font, BRAND_VERSION, x + PANEL_PAD + brandHeadWidth + brandTailWidth + 4, textY,
-                fade(theme.textDim()));
+        graphics.pose().pushMatrix();
+        graphics.pose().translate(originX, originY);
+        graphics.pose().scale(layout.effectiveScale(), layout.effectiveScale());
 
-        if (showBadge) {
-            int badgeWidth = font.width(settings.preset.label()) + 8;
-            int badgeX = x + width - PANEL_PAD - badgeWidth;
-            int badgeY = y + (BRAND_HEIGHT - 9) / 2;
-            Render2D.roundedRect(graphics, badgeX, badgeY, badgeWidth, 9, 4, fade(theme.accent()),
-                    fade(theme.accentDeep()));
-            int badgeText = Colors.brightness(theme.accent()) > 0.6F ? 0xFF14101A : 0xFFFFFFFF;
-            Render2D.textCentered(graphics, font, settings.preset.label(), badgeX + badgeWidth / 2, badgeY + 1,
-                    fade(badgeText));
+        Render2D.glassPanel(graphics, 0, 0, width, BRAND_HEIGHT, PANEL_RADIUS, theme, opacity);
+        int textY = (BRAND_HEIGHT - font.lineHeight) / 2 + 1;
+        Render2D.text(graphics, font, BRAND_HEAD, PANEL_PAD, textY, fade(theme.text(), opacity));
+        Render2D.text(graphics, font, BRAND_TAIL, PANEL_PAD + brandHeadWidth, textY, fade(theme.accent(), opacity));
+        Render2D.text(graphics, font, BRAND_VERSION, PANEL_PAD + brandHeadWidth + brandTailWidth + 4, textY,
+                fade(theme.textDim(), opacity));
+
+        if (badge(settings)) {
+            int badgeBox = font.width(settings.preset.label()) + 8;
+            int badgeX = width - PANEL_PAD - badgeBox;
+            int badgeY = (BRAND_HEIGHT - 9) / 2;
+            Render2D.roundedRect(graphics, badgeX, badgeY, badgeBox, 9, 4, fade(theme.accent(), opacity),
+                    fade(theme.accentDeep(), opacity));
+            int badgeInk = Colors.brightness(theme.accent()) > 0.6F ? 0xFF14101A : 0xFFFFFFFF;
+            Render2D.textCentered(graphics, font, settings.preset.label(), badgeX + badgeBox / 2, badgeY + 1,
+                    fade(badgeInk, opacity));
         }
 
         // Accent underline: the signature ASweetH detail.
-        Render2D.accentBar(graphics, x + PANEL_PAD, y + BRAND_HEIGHT - 2, width - PANEL_PAD * 2, 1, theme, opacity);
-        return y + BRAND_HEIGHT + PANEL_GAP;
+        Render2D.accentBar(graphics, PANEL_PAD, BRAND_HEIGHT - 2, width - PANEL_PAD * 2, 1, theme, opacity);
+        graphics.pose().popMatrix();
+
+        HudBounds.put(element, originX, originY, scaledWidth, scaledHeight);
     }
 
     /**
-     * Draws the FPS / ping / coordinates / chunks / memory readout as one aligned block.
+     * Draws one readout as a small pill: dim label on the left, accent value on the right.
      *
-     * @param rows number of enabled rows, already counted by {@link #infoRows}
+     * @param valueWidth measured glyph width of {@code value}, cached by {@link #refresh}
      */
-    private void drawInfo(GuiGraphicsExtractor graphics, Font font, ThemeMode theme, ClientSettings settings,
-                          int x, int y, int rows) {
-        int width = infoWidth();
-        int height = PANEL_PAD * 2 + rows * Render2D.LINE_STEP - 1;
+    private void drawChip(GuiGraphicsExtractor graphics, Font font, ThemeMode theme, ClientSettings settings,
+                          HudElement element, String value, int valueWidth, int guiWidth, int guiHeight) {
+        boolean enabled = element.enabled(settings);
+        if (!enabled && !editing) {
+            return;
+        }
+        HudLayout layout = settings.layout(element);
+        int labelWidth = labelWidths[element.ordinal()];
+        int width = CHIP_PAD * 2 + labelWidth + LABEL_GAP + valueWidth;
+        int scaledWidth = layout.scaledWidth(width);
+        int scaledHeight = layout.scaledHeight(CHIP_HEIGHT);
+        int originX = layout.x(guiWidth, scaledWidth, MARGIN);
+        int originY = layout.y(guiHeight, scaledHeight, MARGIN);
+        float opacity = layout.alpha(enabled);
 
-        Render2D.glassPanel(graphics, x, y, width, height, PANEL_RADIUS, theme, opacity);
-        int rowY = y + PANEL_PAD;
-        int labelX = x + PANEL_PAD;
-        int valueLeft = labelX + labelWidth + LABEL_GAP;
-        if (settings.showFps) {
-            row(graphics, font, theme, LABEL_FPS, fpsText, labelX, valueLeft, rowY);
-            rowY += Render2D.LINE_STEP;
-        }
-        if (settings.showPing) {
-            row(graphics, font, theme, LABEL_PING, pingText, labelX, valueLeft, rowY);
-            rowY += Render2D.LINE_STEP;
-        }
-        if (settings.showCoordinates) {
-            row(graphics, font, theme, LABEL_POSITION, positionText, labelX, valueLeft, rowY);
-            rowY += Render2D.LINE_STEP;
-        }
-        if (settings.showChunks) {
-            row(graphics, font, theme, LABEL_CHUNKS, chunkText, labelX, valueLeft, rowY);
-            rowY += Render2D.LINE_STEP;
-        }
-        if (settings.showMemory) {
-            row(graphics, font, theme, LABEL_MEMORY, memoryText, labelX, valueLeft, rowY);
-        }
-    }
+        graphics.pose().pushMatrix();
+        graphics.pose().translate(originX, originY);
+        graphics.pose().scale(layout.effectiveScale(), layout.effectiveScale());
 
-    private void row(GuiGraphicsExtractor graphics, Font font, ThemeMode theme, String label, String value,
-                     int labelX, int valueLeft, int y) {
-        Render2D.text(graphics, font, label, labelX, y, fade(theme.textDim()));
-        Render2D.text(graphics, font, value, valueLeft, y, fade(theme.accent()));
-    }
+        Render2D.glassPanel(graphics, 0, 0, width, CHIP_HEIGHT, CHIP_RADIUS, theme, opacity);
+        int textY = (CHIP_HEIGHT - font.lineHeight) / 2 + 1;
+        Render2D.text(graphics, font, chipLabel(element), CHIP_PAD, textY, fade(theme.textDim(), opacity));
+        Render2D.text(graphics, font, value, CHIP_PAD + labelWidth + LABEL_GAP, textY, fade(theme.accent(), opacity));
 
-    /**
-     * Updates the readout strings.
-     *
-     * <p>Only the elapsed period decides whether a value is rebuilt, so a 500 FPS client no longer
-     * allocates three strings and five glyph-width lookups every single frame - the old behaviour.
-     * Turning "Cache readouts" off forces a refresh every call, which is useful when debugging but
-     * measurably slower.</p>
-     */
-    private void refresh(Minecraft minecraft, LocalPlayer player, Font font, ClientSettings settings) {
-        long now = System.currentTimeMillis();
-        boolean cache = settings.cacheReadouts;
-        if (!cache || now - fpsStamp >= FPS_INTERVAL) {
-            fpsStamp = now;
-            fpsText = Integer.toString(minecraft.getFps());
-            fpsWidth = font.width(fpsText);
-        }
-        if (settings.showPing && (!cache || now - pingStamp >= PING_INTERVAL)) {
-            pingStamp = now;
-            pingText = ping(minecraft);
-            pingWidth = font.width(pingText);
-        }
-        if (settings.showCoordinates && (!cache || now - positionStamp >= POSITION_INTERVAL)) {
-            positionStamp = now;
-            positionText = player.getBlockX() + " " + player.getBlockY() + " " + player.getBlockZ();
-            positionWidth = font.width(positionText);
-        }
-        if (settings.showChunks && (!cache || now - chunkStamp >= CHUNK_INTERVAL)) {
-            chunkStamp = now;
-            chunkText = chunks(minecraft);
-            chunkWidth = font.width(chunkText);
-        }
-        if (settings.showMemory && (!cache || now - memoryStamp >= MEMORY_INTERVAL)) {
-            memoryStamp = now;
-            memoryText = memory();
-            memoryWidth = font.width(memoryText);
-        }
+        graphics.pose().popMatrix();
+
+        HudBounds.put(element, originX, originY, scaledWidth, scaledHeight);
     }
 
     /** Recomputes the static metrics whenever the font instance changes. */
@@ -299,14 +255,56 @@ public final class AsweetHHud implements ForgeLayer {
         brandHeadWidth = font.width(BRAND_HEAD);
         brandTailWidth = font.width(BRAND_TAIL);
         brandVersionWidth = font.width(BRAND_VERSION);
-        labelWidth = Math.max(Math.max(font.width(LABEL_FPS), font.width(LABEL_PING)),
-                Math.max(font.width(LABEL_POSITION), Math.max(font.width(LABEL_CHUNKS), font.width(LABEL_MEMORY))));
+        for (HudElement element : HudElement.values()) {
+            labelWidths[element.ordinal()] = font.width(chipLabel(element));
+        }
         // Force a value refresh so the cached widths are measured with the new font.
         fpsStamp = 0L;
         pingStamp = 0L;
         positionStamp = 0L;
         chunkStamp = 0L;
         memoryStamp = 0L;
+    }
+
+    /**
+     * Updates the readout strings.
+     *
+     * <p>Only the elapsed period decides whether a value is rebuilt, so a 500 FPS client no longer
+     * allocates five strings and five glyph-width lookups every single frame - the old behaviour.
+     * Turning "Cache readouts" off forces a refresh every call, which is useful when debugging but
+     * measurably slower.</p>
+     *
+     * <p>Every readout is refreshed even when its pill is switched off: the HUD editor previews the
+     * hidden ones, and a pill whose text was last built a minute ago would read as a bug there.</p>
+     */
+    private void refresh(Minecraft minecraft, LocalPlayer player, Font font, ClientSettings settings) {
+        long now = System.currentTimeMillis();
+        boolean cache = settings.cacheReadouts;
+        if (!cache || now - fpsStamp >= FPS_INTERVAL) {
+            fpsStamp = now;
+            fpsText = Integer.toString(minecraft.getFps());
+            fpsWidth = font.width(fpsText);
+        }
+        if (!cache || now - pingStamp >= PING_INTERVAL) {
+            pingStamp = now;
+            pingText = ping(minecraft);
+            pingWidth = font.width(pingText);
+        }
+        if (!cache || now - positionStamp >= POSITION_INTERVAL) {
+            positionStamp = now;
+            positionText = player.getBlockX() + " " + player.getBlockY() + " " + player.getBlockZ();
+            positionWidth = font.width(positionText);
+        }
+        if (!cache || now - chunkStamp >= CHUNK_INTERVAL) {
+            chunkStamp = now;
+            chunkText = chunks(minecraft);
+            chunkWidth = font.width(chunkText);
+        }
+        if (!cache || now - memoryStamp >= MEMORY_INTERVAL) {
+            memoryStamp = now;
+            memoryText = memory();
+            memoryWidth = font.width(memoryText);
+        }
     }
 
     /** Latency of the local player as reported by the server list entry, or {@code "-"} when unknown. */

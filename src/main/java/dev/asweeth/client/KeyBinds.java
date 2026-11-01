@@ -39,6 +39,13 @@ public final class KeyBinds {
     public static final KeyMapping COPY_COORDS = new KeyMapping("key.asweeth.copy_coords",
             InputConstants.Type.KEYBOARD, InputConstants.KEY_J, CATEGORY);
 
+    /**
+     * Opens the drag editor for the HUD. F6 keeps it clear of the menu key and of the WASD side of the
+     * keyboard, since the editor is used while looking at the corners the HUD lives in.
+     */
+    public static final KeyMapping OPEN_HUD_EDITOR = new KeyMapping("key.asweeth.open_hud_editor",
+            InputConstants.Type.KEYBOARD, InputConstants.KEY_F6, CATEGORY);
+
     private KeyBinds() {
     }
 
@@ -49,5 +56,6 @@ public final class KeyBinds {
         event.register(CYCLE_PRESET);
         event.register(ZOOM);
         event.register(COPY_COORDS);
+        event.register(OPEN_HUD_EDITOR);
     }
 }

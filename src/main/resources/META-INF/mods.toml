@@ -5,7 +5,7 @@ clientSideOnly=true
 
 [[mods]]
 modId="asweeth"
-version="0.1.0"
+version="0.1.1"
 displayName="ASweetH"
 authors="grivia0"
 displayURL="https://github.com/grivia0/AsweetH"

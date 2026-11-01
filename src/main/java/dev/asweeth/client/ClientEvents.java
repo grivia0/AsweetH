@@ -6,6 +6,7 @@ import dev.asweeth.client.hud.AsweetHHud;
 import dev.asweeth.client.hud.KeystrokesHud;
 import dev.asweeth.client.perf.Optimisations;
 import dev.asweeth.client.screen.AsweetHScreen;
+import dev.asweeth.client.screen.HudEditorScreen;
 import dev.asweeth.config.ClientSettings;
 import dev.asweeth.theme.Theme;
 import dev.asweeth.theme.ThemeMode;
@@ -132,6 +133,14 @@ public final class ClientEvents {
             ClientSettings settings = ClientSettings.get();
             settings.hudEnabled = !settings.hudEnabled;
             settings.save();
+        }
+
+        while (KeyBinds.OPEN_HUD_EDITOR.consumeClick()) {
+            // The editor draws the HUD over the live world, so it only makes sense in game: with no
+            // player there is nothing behind it and the readouts have nothing to report.
+            if (minecraft.gui.screen() == null && minecraft.player != null) {
+                minecraft.gui.setScreen(new HudEditorScreen());
+            }
         }
 
         while (KeyBinds.TOGGLE_KEYSTROKES.consumeClick()) {

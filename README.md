@@ -51,9 +51,9 @@ Rose Glass, the default, is the dark smoked one from the banner.
 
 |  |  |
 |:--|:--|
-| **A HUD that matches the game**<br>Watermark plus FPS, ping, coordinates, chunk count and memory. Nine-way anchor grid, 0.6–1.8× scale, opacity, and a switch per row — so it never fights your hotbar. | **Hold-to-zoom that keeps working**<br>`C` glides the field of view to your factor (1.5–10×) and back. The FOV is *divided* rather than overwritten, so sprinting, water and the death screen survive a zoom. |
+| **A HUD that matches the game**<br>Watermark plus FPS, ping, coordinates, chunk count and memory. Nine-way anchor grid, 0.6–1.8× scale, opacity, a drag editor and a switch per row — so it never fights your hotbar. | **Hold-to-zoom that keeps working**<br>`C` glides the field of view to your factor (1.5–10×) and back. The FOV is *divided* rather than overwritten, so sprinting, water and the death screen survive a zoom. |
 | **Fullbright, done at the source**<br>One switch lights unlit caves and the Nether floor without a resource pack, particles or a green tint — it writes the lightmap uniforms vanilla already uses. | **An Optimise tab with real teeth**<br>Lookup-table maths, batched glass panels, cached readouts and an adaptive render distance that steps down to hold your target FPS. |
-| **Keystrokes worth looking at**<br>WASD / space / mouse caps with the same anchor, scale, opacity and colour controls as the HUD. | **Presets that stay honest**<br>Standard, Lite, Potato and Max view write real vanilla options — the vanilla video settings screen shows exactly what changed. |
+| **Keystrokes worth looking at**<br>WASD / space / mouse caps with the same position, scale, opacity and colour controls as the HUD. | **Presets that stay honest**<br>Standard, Lite, Potato and Max view write real vanilla options — the vanilla video settings screen shows exactly what changed. |
 
 ## 🎨 The look
 
@@ -76,9 +76,11 @@ low-contrast displays).
 | **Side** | Client only — marked `clientSideOnly` in `mods.toml`, so it is skipped on a dedicated server |
 
 1. Install **Forge 26.3** and launch it once, so the launcher creates the instance.
-2. Drop `asweeth-0.1.0.jar` into that instance's `mods/` folder
-   (`%APPDATA%\.minecraft\mods` on Windows, `~/.minecraft/mods` on Linux and macOS).
-3. Start the game. The HUD appears in the top left, and **Right Shift** opens the menu.
+2. Drop the jar into that instance's `mods/` folder (`asweeth-0.1.0.jar` for the published release,
+   `asweeth-0.1.1.jar` if you built this repository yourself) — `%APPDATA%\.minecraft\mods` on Windows,
+   `~/.minecraft/mods` on Linux and macOS.
+3. Start the game. The HUD appears in the top left, **Right Shift** opens the menu and **F6** opens the
+   layout editor.
 
 > [!TIP]
 > **[Download `asweeth-0.1.0.jar`](https://github.com/grivia0/AsweetH/releases/download/v0.1.0/asweeth-0.1.0.jar)** —
@@ -99,21 +101,24 @@ change, so a crash never eats them. Deleting the file is a full reset.
 | <kbd>L</kbd> | Cycle preset: Standard → Lite → Potato → Max view |
 | <kbd>C</kbd> | Zoom while held (factor set in the Keys tab) |
 | <kbd>J</kbd> | Copy your block coordinates to the clipboard |
+| <kbd>F6</kbd> | Open the HUD layout editor |
 
-All six live in their own **ASweetH** category in *Options → Controls → Key Binds*, so they rebind like
+All seven live in their own **ASweetH** category in *Options → Controls → Key Binds*, so they rebind like
 any vanilla key.
 
 ## ✨ Features
 
 ### HUD & keystrokes
 
-A compact watermark plus readout panel, anchored to any of **nine** positions on the screen.
+A compact watermark plus readout panel; every piece is placed by dragging it where you want it, and
+pinned to whichever of the **nine** anchors is closest.
 
-* `ASweetH v0.1.0` wordmark, trailing **H** in the accent colour, gradient underline.
+* `ASweetH v0.1.1` wordmark, trailing **H** in the accent colour, gradient underline.
 * Rows for **FPS**, **ping**, **coordinates**, **chunks** and **memory**, each switchable on its own.
 * A badge with the active profile (`Lite`, `Potato`, `Max view`) beside the version — only shown while
   something other than Standard is applied.
-* **Anchor**, **opacity** (20–100 %) and a uniform **size** slider (0.6–1.8×), plus a master switch.
+* **Position**, **opacity** (20–100 %) and a uniform **size** (0.6–1.8×) per element, plus a master
+  switch — all set by dragging in the HUD editor.
 
 The block measures itself first and only then picks its origin, so anchoring and scaling never clip: a
 1.8× HUD still hugs the edge it is pinned to, and the narrower panel right-aligns with the other one.
@@ -121,8 +126,32 @@ Opacity fades outlines, fills, the accent bar and the glyphs together. It is dra
 `AddGuiOverlayLayersEvent`, so it is a real HUD layer rather than a render hack, and it behaves like
 vanilla overlays around open screens.
 
-The keystroke readout (`WASD`, space, mouse) has its own anchor, size, opacity and tint, so the two
-blocks can share a corner or get out of each other's way.
+The keystroke readout (`WASD`, space, mouse) has its own spot, size, opacity and tint, so the two blocks
+can share a corner or get out of each other's way.
+
+### HUD editor
+
+Press <kbd>F6</kbd> — or **Edit HUD layout...** in the General or Keys tab — and the HUD stays on screen
+over the live world while you arrange it.
+
+* **Drag** any element where you want it; the element under the cursor gets a hairline frame first.
+* **Arrow keys** nudge the selection by 1 px, <kbd>Shift</kbd> 5 px, <kbd>Ctrl</kbd> 10 px;
+  <kbd>Ctrl</kbd> while dragging snaps to a 4 px grid.
+* <kbd>Tab</kbd> cycles the selection (<kbd>Shift</kbd> walks it backwards), the inspector retargets to
+  it, and the **Shown**, **Size** (0.6–1.8×) and **Opacity** (20–100 %) rows act on the selected element
+  only.
+* **Reset element** restores one element; **Reset all** asks for a second click, because there is no undo.
+
+Two details make this usable rather than fiddly. The screen is not a pause screen and paints no
+background, so FPS, ping and the keystroke animation keep moving while you look at them. And every
+element publishes the rectangle it actually painted — the editor hit tests that instead of measuring
+seven elements a second time, so a drag grabs exactly what you see, including an element you have
+switched off (offs are previewed at 45 % alpha, never hidden).
+
+A drop re-pins the element to the nearest of the nine anchors, so what is stored is a small offset from
+the closest corner instead of a large one from a far away anchor — the layout then survives a window
+resize or a GUI scale change where it used to drift. Positions are clamped to the screen on the way in,
+so no drag can park an element off the edge.
 
 ### Zoom
 
@@ -183,9 +212,9 @@ which version you are on.
 
 | Tab | What it holds |
 |:--|:--|
-| **General** | HUD master switch, watermark, coordinates, HUD position, opacity, size, fullbright |
+| **General** | HUD master switch, watermark, coordinates, edit layout, fullbright |
 | **HUD** | FPS, ping, memory, chunk and preset-badge rows |
-| **Keys** | keystroke switches, position, size, opacity, colour scheme, zoom factor |
+| **Keys** | keystroke switches, mouse buttons, edit layout, colour scheme, zoom factor |
 | **Theme** | palette cycle button, animations, live swatches of every theme |
 | **Performance** | preset cycle button, apply button, description of the selected profile |
 | **Optimise** | maths, panel batching, readout caching, smart culling, menu blur, streaming aid, target FPS |
@@ -253,12 +282,14 @@ Everything is in the menu, and everything is also a key in `config/asweeth.json`
   "theme": "ROSE_GLASS",
   "preset": "STANDARD",
   "hudEnabled": true,
-  "hudAnchor": "TOP_LEFT",
-  "hudScale": 1.0,
-  "hudOpacity": 1.0,
   "fullbright": false,
   "zoomFactor": 4.0,
-  "targetFps": 120
+  "targetFps": 120,
+  "hudLayouts": {
+    "WATERMARK": { "anchor": "TOP_LEFT", "offsetX": 0, "offsetY": 0, "scale": 1.0, "opacity": 1.0 },
+    "FPS": { "anchor": "TOP_LEFT", "offsetX": 0, "offsetY": 21, "scale": 1.0, "opacity": 1.0 },
+    "KEYSTROKES": { "anchor": "BOTTOM_LEFT", "offsetX": 0, "offsetY": 0, "scale": 1.0, "opacity": 0.9 }
+  }
 }
 ```
 
@@ -270,9 +301,11 @@ Everything is in the menu, and everything is also a key in `config/asweeth.json`
 | `showWatermark`, `showCoordinates`, `showChunks`, `showFps`, `showPing`, `showLiteBadge` | bool | `true` |
 | `showMemory` | bool | `false` |
 | `keystrokesMouse` | bool | `true` |
-| `hudAnchor`, `keystrokeAnchor` | `TOP_LEFT` … `BOTTOM_RIGHT` (nine anchors) | `TOP_LEFT` / `BOTTOM_LEFT` |
-| `hudScale`, `keystrokeScale` | `0.6` – `1.8` | `1.0` |
-| `hudOpacity`, `keystrokeOpacity` | `0.2` – `1.0` | `1.0` / `0.9` |
+| `hudLayouts` | one entry per element: `WATERMARK`, `FPS`, `PING`, `COORDINATES`, `CHUNKS`, `MEMORY`, `KEYSTROKES` | defaults from `HudElement.defaultLayout()` |
+| `hudLayouts.<element>.anchor` | `TOP_LEFT` … `BOTTOM_RIGHT` (nine anchors) | `TOP_LEFT`, keystrokes `BOTTOM_LEFT` |
+| `hudLayouts.<element>.offsetX` / `offsetY` | GUI pixels away from the anchor | `0` for the watermark and keystrokes, then `21`, `36`, `51`, `66`, `81` down the left column |
+| `hudLayouts.<element>.scale` | `0.6` – `1.8` | `1.0` |
+| `hudLayouts.<element>.opacity` | `0.2` – `1.0` | `1.0`, keystrokes `0.9` |
 | `keystrokeTint` | `THEME`, `ACCENT`, `MONO` | `THEME` |
 | `animations`, `themeVanillaScreens` | bool | `true` |
 | `zoomFactor` | `1.5` – `10.0` | `4.0` |
@@ -291,7 +324,7 @@ Everything is in the menu, and everything is also a key in `config/asweeth.json`
 ```bash
 git clone https://github.com/grivia0/AsweetH.git
 cd AsweetH
-./gradlew build          # jar lands in build/libs/asweeth-0.1.0.jar
+./gradlew build          # jar lands in build/libs/asweeth-0.1.1.jar
 ./gradlew runClient      # dev launch, no launcher needed
 ```
 
@@ -312,9 +345,10 @@ src/main/java/dev/asweeth/
 │   ├── KeyBinds.java             ASweetH key mapping category
 │   ├── Zoom.java                 hold-to-zoom lens driven by ComputeFov
 │   ├── FabricModCheck.java       warns about Fabric jars Forge cannot load
-│   ├── hud/                      AsweetHHud, KeystrokesHud, HudAnchor, KeystrokeTint
+│   ├── hud/                      AsweetHHud, KeystrokesHud, HudElement, HudLayout, HudAnchor,
+│   │                             HudBounds, KeystrokeTint
 │   ├── perf/                     PerformancePreset, Optimisations
-│   ├── screen/                   AsweetHScreen, SettingsTab
+│   ├── screen/                   AsweetHScreen, SettingsTab, HudEditorScreen
 │   └── widget/                   glass widgets, ScrollPanel, HintBlock
 ├── config/ClientSettings.java    Gson persistence in config/asweeth.json
 ├── mixin/                        LightmapRenderStateExtractorMixin (fullbright)
@@ -381,7 +415,7 @@ jars without a word, so without this line the only symptom is a mod that quietly
 
 | Symptom | Fix |
 |:--|:--|
-| The HUD is not on screen | <kbd>H</kbd>, or *General → HUD* — and check the opacity slider is not at 20 % against a dark sky. |
+| The HUD is not on screen | <kbd>H</kbd>, or *General → HUD* — and check the element's opacity in the HUD editor (<kbd>F6</kbd>) is not at 20 % against a dark sky. That editor also previews switched-off elements, so you can always find one that went missing. |
 | Fullbright does nothing | It is off by default; turn it on in *General → Fullbright*. |
 | `Unsupported class file major version 71` while building | Gradle is running on a JDK newer than 25; the daemon pin handles it, so check that `gradle/gradle-daemon-jvm.properties` survived your clone. |
 | My settings reset | `config/asweeth.json` was deleted or unreadable — ASweetH logs one line and starts from defaults instead of refusing to load. |

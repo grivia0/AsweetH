@@ -24,7 +24,7 @@ public final class AsweetH {
     /** Human readable name, used for the window title and the watermark. */
     public static final String CLIENT_NAME = "ASweetH";
     /** Client version shown in the HUD watermark and the settings screen footer. */
-    public static final String VERSION = "0.1.0";
+    public static final String VERSION = "0.1.1";
 
     private static final Logger LOGGER = LogUtils.getLogger();
 

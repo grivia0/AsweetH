@@ -2,9 +2,12 @@ package dev.asweeth.config;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
 import dev.asweeth.AsweetH;
 import dev.asweeth.client.Zoom;
 import dev.asweeth.client.hud.HudAnchor;
+import dev.asweeth.client.hud.HudElement;
+import dev.asweeth.client.hud.HudLayout;
 import dev.asweeth.client.hud.KeystrokeTint;
 import dev.asweeth.client.perf.PerformancePreset;
 import dev.asweeth.theme.ThemeMode;
@@ -13,6 +16,8 @@ import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.EnumMap;
+import java.util.Map;
 import net.minecraftforge.fml.loading.FMLPaths;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,23 +48,21 @@ public final class ClientSettings {
     public boolean showMemory = false;
     public boolean showChunks = true;
     public boolean showLiteBadge = true;
-    /** Uniform scale applied to the whole HUD, 0.6 - 1.8. */
-    public float hudScale = 1.0F;
-    /** Corner the HUD block is pinned to. */
-    public HudAnchor hudAnchor = HudAnchor.TOP_LEFT;
-    /** Alpha multiplier for the HUD panels and their text, 0.2 - 1.0. */
-    public float hudOpacity = 1.0F;
+    /**
+     * Per element position, scale and opacity, keyed by {@link HudElement}.
+     *
+     * <p>One map instead of a dozen floats: the HUD gained a per element editor, and seven elements
+     * times three settings would otherwise mean twenty one near identical fields, twenty one clamps and
+     * twenty one places to forget when an element is added. Declared as {@code Map} rather than
+     * {@code EnumMap} because Gson instantiates interfaces through its own map type; the file is
+     * re-keyed into an {@link EnumMap} by {@link #sanitizeLayouts()}.</p>
+     */
+    public Map<HudElement, HudLayout> hudLayouts = new EnumMap<>(HudElement.class);
 
-    /** Draws the WASD / space / mouse readout in the bottom left corner. */
+    /** Draws the WASD / space / mouse readout. Position and size live in {@link #hudLayouts}. */
     public boolean keystrokesEnabled = true;
     /** Adds the left and right mouse buttons to that readout. */
     public boolean keystrokesMouse = true;
-    /** Uniform scale of the keystroke block, 0.6 - 1.8. */
-    public float keystrokeScale = 1.0F;
-    /** Corner the keystroke block is pinned to. */
-    public HudAnchor keystrokeAnchor = HudAnchor.BOTTOM_LEFT;
-    /** Alpha multiplier for the key caps, 0.2 - 1.0. */
-    public float keystrokeOpacity = 0.9F;
     /** Which colour scheme the key caps use. */
     public KeystrokeTint keystrokeTint = KeystrokeTint.THEME;
 
@@ -146,10 +149,16 @@ public final class ClientSettings {
         Path file = file();
         if (file != null && Files.isRegularFile(file)) {
             try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
-                ClientSettings loaded = GSON.fromJson(reader, ClientSettings.class);
-                if (loaded != null) {
-                    loaded.sanitize();
-                    return loaded;
+                // Read as a tree first so the migration below can still see the keys the single block
+                // layout of v0.1.0 used; Gson drops keys that no longer exist when it binds the object.
+                JsonObject root = GSON.fromJson(reader, JsonObject.class);
+                if (root != null) {
+                    ClientSettings loaded = GSON.fromJson(root, ClientSettings.class);
+                    if (loaded != null) {
+                        loaded.migrate(root);
+                        loaded.sanitize();
+                        return loaded;
+                    }
                 }
             } catch (Exception exception) {
                 LOGGER.warn("Could not read ASweetH settings from {} - using defaults", file, exception);
@@ -178,18 +187,118 @@ public final class ClientSettings {
         if (keystrokeTint == null) {
             keystrokeTint = KeystrokeTint.THEME;
         }
-        if (hudAnchor == null) {
-            hudAnchor = HudAnchor.TOP_LEFT;
-        }
-        if (keystrokeAnchor == null) {
-            keystrokeAnchor = HudAnchor.BOTTOM_LEFT;
-        }
-        hudScale = clamp(hudScale, 0.6F, 1.8F, 1.0F);
-        hudOpacity = clampOpacity(hudOpacity, 1.0F);
-        keystrokeScale = clamp(keystrokeScale, 0.6F, 1.8F, 1.0F);
-        keystrokeOpacity = clamp(keystrokeOpacity, 0.2F, 1.0F, 0.9F);
+        sanitizeLayouts();
         zoomFactor = clampZoom(zoomFactor);
         targetFps = Math.max(30, Math.min(360, targetFps));
+    }
+
+    /**
+     * Layout of {@code element}, creating the default the first time it is asked for.
+     *
+     * <p>The HUD layers call this every frame for every element, so it must not allocate once the map
+     * is populated; a default is only built for an element that a config file did not mention.</p>
+     */
+    public HudLayout layout(HudElement element) {
+        Map<HudElement, HudLayout> map = layouts();
+        HudLayout layout = map.get(element);
+        if (layout == null) {
+            layout = element.defaultLayout();
+            map.put(element, layout);
+        }
+        return layout;
+    }
+
+    /** Restores one element to its default position, scale and opacity. */
+    public void resetLayout(HudElement element) {
+        layouts().put(element, element.defaultLayout());
+    }
+
+    /** Restores every element, behind the editor's "Reset all" button. */
+    public void resetLayouts() {
+        for (HudElement element : HudElement.values()) {
+            resetLayout(element);
+        }
+    }
+
+    /** The layout map, created if the field is null (a config written before the editor existed). */
+    private Map<HudElement, HudLayout> layouts() {
+        Map<HudElement, HudLayout> map = hudLayouts;
+        if (map == null) {
+            map = new EnumMap<>(HudElement.class);
+            hudLayouts = map;
+        }
+        return map;
+    }
+
+    /**
+     * Normalises the layout map: fills in missing elements, clamps the values and re-keys the map into
+     * an {@link EnumMap}.
+     *
+     * <p>Gson binds a {@code Map} field to a {@code LinkedTreeMap}, whose enum keys work but whose
+     * lookups compare strings instead of switching on the ordinal. Re-keying also drops an entry whose
+     * key is no longer a valid element - a layout written by a build that had an extra readout - so one
+     * stale key cannot fail the whole config load.</p>
+     */
+    private void sanitizeLayouts() {
+        Map<HudElement, HudLayout> existing = hudLayouts;
+        if (existing != null && !(existing instanceof EnumMap)) {
+            Map<HudElement, HudLayout> rekeyed = new EnumMap<>(HudElement.class);
+            for (Map.Entry<HudElement, HudLayout> entry : existing.entrySet()) {
+                if (entry.getKey() != null && entry.getValue() != null) {
+                    rekeyed.put(entry.getKey(), entry.getValue());
+                }
+            }
+            hudLayouts = rekeyed;
+        }
+        for (HudElement element : HudElement.values()) {
+            layout(element).sanitize(element.defaultLayout());
+        }
+    }
+
+    /**
+     * Carries a v0.1.0 config over to per element layouts.
+     *
+     * <p>Before the editor the HUD had one anchor, scale and opacity for the watermark block and a
+     * second trio for the keystrokes. Those fields no longer exist, so their values are read from the
+     * raw tree: copying them onto every element keeps an upgraded player's HUD where it was instead of
+     * snapping everything back to the top left at full size.</p>
+     */
+    private void migrate(JsonObject root) {
+        if (root.has("hudLayouts")) {
+            return;
+        }
+        HudAnchor hudAnchor = anchor(root, "hudAnchor", HudAnchor.TOP_LEFT);
+        HudAnchor keyAnchor = anchor(root, "keystrokeAnchor", HudAnchor.BOTTOM_LEFT);
+        float hudScale = number(root, "hudScale", 1.0F);
+        float hudOpacity = number(root, "hudOpacity", 1.0F);
+        float keyScale = number(root, "keystrokeScale", 1.0F);
+        float keyOpacity = number(root, "keystrokeOpacity", 0.9F);
+        for (HudElement element : HudElement.values()) {
+            boolean keys = element == HudElement.KEYSTROKES;
+            HudLayout layout = element.defaultLayout();
+            layout.anchor = keys ? keyAnchor : hudAnchor;
+            layout.scale = keys ? keyScale : hudScale;
+            layout.opacity = keys ? keyOpacity : hudOpacity;
+            layouts().put(element, layout);
+        }
+    }
+
+    /** Reads an anchor name, falling back on a hand edited or renamed value. */
+    private static HudAnchor anchor(JsonObject root, String key, HudAnchor fallback) {
+        try {
+            return root.has(key) ? HudAnchor.valueOf(root.get(key).getAsString()) : fallback;
+        } catch (RuntimeException exception) {
+            return fallback;
+        }
+    }
+
+    /** Reads a number, falling back on a hand edited value. */
+    private static float number(JsonObject root, String key, float fallback) {
+        try {
+            return root.has(key) ? root.get(key).getAsFloat() : fallback;
+        } catch (RuntimeException exception) {
+            return fallback;
+        }
     }
 
     /**
@@ -202,27 +311,5 @@ public final class ClientSettings {
             return Zoom.DEFAULT_FACTOR;
         }
         return Math.max(Zoom.MIN_FACTOR, Math.min(Zoom.MAX_FACTOR, value));
-    }
-
-    /**
-     * Clamps an opacity to 0.2 - 1.0, but reads a zero as "the file predates this setting".
-     *
-     * <p>Gson builds instances without running the field initialisers, so any key missing from an
-     * older config file leaves the field at {@code 0}. Clamping that to the minimum would make the
-     * HUD almost invisible the first time a player updates, so zero (and NaN) falls back instead.</p>
-     */
-    private static float clampOpacity(float value, float fallback) {
-        if (!(value > 0.0F)) {
-            return fallback;
-        }
-        return Math.max(0.2F, Math.min(1.0F, value));
-    }
-
-    private static float clamp(float value, float min, float max, float fallback) {
-        // NaN survives Math.min/max, and Gson happily writes NaN for a hand edited "null" number.
-        if (Float.isNaN(value)) {
-            return fallback;
-        }
-        return Math.max(min, Math.min(max, value));
     }
 }

@@ -3,7 +3,6 @@ package dev.asweeth.client.screen;
 import dev.asweeth.AsweetH;
 import dev.asweeth.client.Zoom;
 import dev.asweeth.client.hud.AsweetHHud;
-import dev.asweeth.client.hud.HudAnchor;
 import dev.asweeth.client.hud.KeystrokeTint;
 import dev.asweeth.client.perf.Optimisations;
 import dev.asweeth.client.perf.PerformancePreset;
@@ -140,34 +139,11 @@ public final class AsweetHScreen extends Screen {
                 content.add(toggle("asweeth.option.coordinates",
                         () -> settings.showCoordinates, value -> settings.showCoordinates = value), y);
                 y += ROW_HEIGHT + ROW_GAP;
-                // Layout of the whole block: where it sits, how solid it is, how big it gets.
-                content.add(new GlassCycleButton<HudAnchor>(0, 0, 0, ROW_HEIGHT,
-                        Component.translatable("asweeth.option.hud_position"), HudAnchor.values(),
-                        () -> settings.hudAnchor,
-                        value -> {
-                            settings.hudAnchor = value;
-                            settings.save();
-                        },
-                        HudAnchor::label, 92), y);
+                // Where each readout sits, how big it is and how solid it is now lives in the drag editor,
+                // which does it per element instead of moving the whole column at once.
+                content.add(new GlassButton(0, 0, 0, ROW_HEIGHT,
+                        Component.translatable("asweeth.option.edit_layout"), false, this::openEditor), y);
                 y += ROW_HEIGHT + ROW_GAP;
-                content.add(new GlassSlider(0, 0, 0, 24,
-                        Component.translatable("asweeth.option.hud_opacity"), 0.2D, 1.0D,
-                        () -> settings.hudOpacity,
-                        value -> {
-                            settings.hudOpacity = (float) value;
-                            settings.save();
-                        },
-                        value -> Math.round(value * 100.0D) + "%"), y);
-                y += ROW_HEIGHT + ROW_GAP;
-                content.add(new GlassSlider(0, 0, 0, 24,
-                        Component.translatable("asweeth.option.hud_scale"), 0.6D, 1.8D,
-                        () -> settings.hudScale,
-                        value -> {
-                            settings.hudScale = (float) value;
-                            settings.save();
-                        },
-                        value -> String.format(Locale.ROOT, "%.2fx", value)), y);
-                y += 24 + ROW_GAP;
                 // Not a HUD switch, but it is the one visual setting that changes the world rather than
                 // the overlay, so it belongs next to the other "how does my game look" rows.
                 content.add(toggle("asweeth.option.fullbright",
@@ -195,36 +171,12 @@ public final class AsweetHScreen extends Screen {
                 content.add(toggle("asweeth.option.keystrokes",
                         () -> settings.keystrokesEnabled, value -> settings.keystrokesEnabled = value), y);
                 y += ROW_HEIGHT + ROW_GAP;
-                content.add(new GlassCycleButton<HudAnchor>(0, 0, 0, ROW_HEIGHT,
-                        Component.translatable("asweeth.option.keystroke_position"), HudAnchor.values(),
-                        () -> settings.keystrokeAnchor,
-                        value -> {
-                            settings.keystrokeAnchor = value;
-                            settings.save();
-                        },
-                        HudAnchor::label, 92), y);
-                y += ROW_HEIGHT + ROW_GAP;
                 content.add(toggle("asweeth.option.keystrokes_mouse",
                         () -> settings.keystrokesMouse, value -> settings.keystrokesMouse = value), y);
                 y += ROW_HEIGHT + ROW_GAP;
-                content.add(new GlassSlider(0, 0, 0, 24,
-                        Component.translatable("asweeth.option.keystrokes_size"), 0.6D, 1.8D,
-                        () -> settings.keystrokeScale,
-                        value -> {
-                            settings.keystrokeScale = (float) value;
-                            settings.save();
-                        },
-                        value -> String.format(Locale.ROOT, "%.2fx", value)), y);
-                y += 24 + ROW_GAP;
-                content.add(new GlassSlider(0, 0, 0, 24,
-                        Component.translatable("asweeth.option.keystrokes_opacity"), 0.2D, 1.0D,
-                        () -> settings.keystrokeOpacity,
-                        value -> {
-                            settings.keystrokeOpacity = (float) value;
-                            settings.save();
-                        },
-                        value -> Math.round(value * 100.0D) + "%"), y);
-                y += 24 + ROW_GAP;
+                content.add(new GlassButton(0, 0, 0, ROW_HEIGHT,
+                        Component.translatable("asweeth.option.edit_layout_keys"), false, this::openEditor), y);
+                y += ROW_HEIGHT + ROW_GAP;
                 content.add(new GlassCycleButton<KeystrokeTint>(0, 0, 0, ROW_HEIGHT,
                         Component.translatable("asweeth.option.keystrokes_colors"), KeystrokeTint.values(),
                         () -> settings.keystrokeTint,
@@ -447,6 +399,17 @@ public final class AsweetHScreen extends Screen {
             setter.accept(value);
             settings.save();
         });
+    }
+
+    /**
+     * Hands over to the drag editor, keeping this screen as its parent so Done comes back here.
+     *
+     * <p>The pending edits are written first: the editor starts from the saved file, and the player
+     * expects a switch they flipped a second ago to be in the layout they are about to drag.</p>
+     */
+    private void openEditor() {
+        ClientSettings.get().save();
+        this.minecraft.gui.setScreen(new HudEditorScreen(this));
     }
 
     @Override
